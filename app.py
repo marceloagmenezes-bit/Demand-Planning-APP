@@ -161,4 +161,143 @@ def render_atualizar_material():
             with col_ano:
                 anos_selecionados = st.multiselect("Selecione os Anos", options=["2026", "2027"])
             with col_mercado:
-                mercados_
+                mercados_selecionados = st.multiselect("Mercados", options=["BRA", "ARG", "OSA"])
+            with col_marca:
+                marcas_selecionadas = st.multiselect("Marcas", options=["FE", "MF", "VT"])
+
+            # NOVO FILTRO: MÊS REALIZADO
+            st.markdown("---")
+            st.write("📌 **Regra de Negócio (Estoque)**")
+            
+            # Dicionário mapeando os nomes para os números equivalentes
+            meses_dict = {
+                "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, 
+                "Maio": 5, "Junho": 6, "Julho": 7, "Agosto": 8, 
+                "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+            }
+            
+            mes_selecionado = st.selectbox(
+                "Selecione o último mês realizado (Real):", 
+                options=list(meses_dict.keys()), 
+                index=4, # Já deixa "Maio" pré-selecionado como padrão
+                help="Os dados de Estoque serão copiados apenas de Janeiro até este mês. Os meses seguintes terão suas fórmulas preservadas."
+            )
+            limite_mes = meses_dict[mes_selecionado] # Converte para número (ex: 5)
+
+            st.markdown("---")
+            
+            mapeamento_abas = {}
+            if anos_selecionados:
+                st.write("📌 **Mapeamento de Abas do DR**")
+                col_abas = st.columns(len(anos_selecionados))
+                
+                for idx, ano in enumerate(anos_selecionados):
+                    with col_abas[idx]:
+                        aba_escolhida = st.selectbox(
+                            f"Qual aba do DR tem os dados de {ano}?", 
+                            options=abas_dr,
+                            key=f"aba_{ano}"
+                        )
+                        mapeamento_abas[ano] = aba_escolhida
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            if st.button("🚀 Executar Transferência de Dados", type="primary", use_container_width=True):
+                if not anos_selecionados or not mercados_selecionados or not marcas_selecionadas:
+                    st.warning("⚠️ Por favor, selecione ao menos um Ano, um Mercado e uma Marca antes de executar.")
+                else:
+                    try:
+                        with st.spinner("Processando cruzamento de dados... Isso pode levar alguns segundos."):
+                            arquivo_pronto = processar_cruzamento_dr_mt(
+                                arquivo_dr=arquivo_dr,
+                                arquivo_mt=arquivo_mt,
+                                anos_selecionados=anos_selecionados,
+                                mercados_selecionados=mercados_selecionados,
+                                marcas_selecionadas=marcas_selecionadas,
+                                mapeamento_abas=mapeamento_abas,
+                                limite_mes=limite_mes # <- Passando a trava inteligente para o robô
+                            )
+                            
+                        st.success("✅ Cópia finalizada com sucesso! O layout e as fórmulas foram mantidos.")
+                        
+                        st.download_button(
+                            label="⬇️ Baixar Material de Trabalho Atualizado",
+                            data=arquivo_pronto,
+                            file_name="Material_de_Trabalho_Atualizado.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error("❌ Ocorreu um erro durante o cruzamento das planilhas.")
+                        st.write(f"Detalhe técnico: {str(e)}")
+                        
+        except Exception as e:
+            st.error("Erro ao ler os arquivos. Verifique se não estão corrompidos ou protegidos com senha.")
+            st.warning(str(e))
+    else:
+        st.info("Aguardando o upload dos dois arquivos para liberar os seletores...")
+
+def render_previsao():
+    st.title("📈 Previsão de Demanda")
+    st.subheader("Modelos Estatísticos e Projeções")
+    st.markdown("---")
+    st.write("Área destinada ao cálculo de Forecast e projeções futuras.")
+
+# ==========================================
+# COMPONENTE DO MENU LATERAL
+# ==========================================
+def build_sidebar():
+    with st.sidebar:
+        nome_logo = "logo.jpg"
+        if os.path.exists(nome_logo):
+            st.image(nome_logo, use_container_width=True)
+        else:
+            st.markdown("### 🏢 DEP. DE PLANEJAMENTO")
+            
+        st.caption("Ambiente Nuvem Protegido")
+        st.markdown("---")
+        
+        selected_app = option_menu(
+            menu_title="Navegação",
+            options=["Home", "Atualizar Material DR", "Previsão"],
+            icons=["", "", ""],
+            menu_icon="",
+            default_index=0,
+            styles={
+                "container": {"padding": "5px!", "background-color": "#FFFFFF"},
+                "nav-link": {
+                    "font-size": "15px", 
+                    "text-align": "left", 
+                    "margin":"0px", 
+                    "--hover-color": "#F0F2F6",
+                    "color": "#31333F"
+                },
+                "nav-link-selected": {
+                    "background-color": "#0078D4",
+                    "color": "white"
+                },
+            }
+        )
+    return selected_app
+
+# ==========================================
+# FLUXO PRINCIPAL (EXECUÇÃO)
+# ==========================================
+def main():
+    try:
+        app_selecionado = build_sidebar()
+        
+        views = {
+            "Home": render_home,
+            "Atualizar Material DR": render_atualizar_material,
+            "Previsão": render_previsao
+        }
+        
+        if app_selecionado in views:
+            views[app_selecionado]()
+            
+    except Exception as e:
+        st.error(f"Ocorreu um erro crítico na aplicação: {str(e)}")
+
+if __name__ == "__main__":
+    main()

@@ -142,15 +142,18 @@ def main():
     try:
         app_selecionado = build_sidebar()
         
-views = {
-    "Home": render_home,
-    "Atualizar Material DR": render_atualizar_material, # <- Conecta o menu à nova função
-    "Previsão": render_previsao
-}
+        # Mapeamento de Navegação (Dicionário de Telas)
+        views = {
+            "Home": render_home,
+            "Atualizar Material DR": render_atualizar_material,
+            "Previsão": render_previsao
+        }
         
+        # Renderização dinâmica na área dos 75% da tela
         if app_selecionado in views:
             views[app_selecionado]()
             
+    # Este é o bloco que estava faltando ou desalinhado!
     except Exception as e:
         st.error(f"Ocorreu um erro crítico na aplicação: {str(e)}")
 

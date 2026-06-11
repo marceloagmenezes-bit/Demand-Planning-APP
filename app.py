@@ -190,13 +190,38 @@ def render_atualizar_material():
 
             st.markdown("<br>", unsafe_allow_html=True)
             
+       st.markdown("<br>", unsafe_allow_html=True)
+            
             # Botão de Execução
             if st.button("🚀 Executar Transferência de Dados", type="primary", use_container_width=True):
                 if not anos_selecionados or not mercados_selecionados or not marcas_selecionadas:
                     st.warning("⚠️ Por favor, selecione ao menos um Ano, um Mercado e uma Marca antes de executar.")
                 else:
-                    st.info("A lógica de cruzamento (OpenPyXL) entrará aqui!")
-                    # Aqui chamaremos a função de processamento no próximo passo
+                    try:
+                        with st.spinner("Processando cruzamento de dados... Isso pode levar alguns segundos."):
+                            # Chama o nosso robô do OpenPyXL
+                            arquivo_pronto = processar_cruzamento_dr_mt(
+                                arquivo_dr=arquivo_dr,
+                                arquivo_mt=arquivo_mt,
+                                anos_selecionados=anos_selecionados,
+                                mercados_selecionados=mercados_selecionados,
+                                marcas_selecionadas=marcas_selecionadas,
+                                mapeamento_abas=mapeamento_abas
+                            )
+                            
+                        st.success("✅ Cópia finalizada com sucesso! O layout e as fórmulas foram mantidos.")
+                        
+                        # Gera o botão para baixar o resultado final
+                        st.download_button(
+                            label="⬇️ Baixar Material de Trabalho Atualizado",
+                            data=arquivo_pronto,
+                            file_name="Material_de_Trabalho_Atualizado.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.error("❌ Ocorreu um erro durante o cruzamento das planilhas.")
+                        st.write(f"Detalhe técnico: {str(e)}")
                     
         except Exception as e:
             st.error("Erro ao ler os arquivos. Verifique se não estão corrompidos ou protegidos com senha.")

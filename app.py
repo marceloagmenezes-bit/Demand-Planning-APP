@@ -50,45 +50,69 @@ def render_home():
     st.info("💡 Selecione uma funcionalidade no menu lateral para iniciar o processamento.")
 
 def render_atualizar_material():
-    # O parâmetro 'help' cria automaticamente o ícone de '?' com o texto ao passar o mouse!
     st.header(
         "Atualizar material de trabalho com informações do DR", 
-        help="Geralmente utilizado no início do ciclo, após atualização dos realizados do mês anterior. Transfere os dados do DR para o material de trabalho: Ao carregar os dois arquivos, selecione as marcas e os mercados desejados, e as informações de RT, WS, MRP e estoques serão transferidas do DR para o Material de trabalho!"
+        help="Geralmente utilizado no início do ciclo, após atualização dos realizados do mês anterior. Transfere os dados do DR para o material de trabalho: Ao carregar os dois arquivos, selecione as marcas e os mercados desejados, e as informações de RT, WS, MRP e estoques serão transferidas do DR para o Material de Trabalho!"
     )
     st.markdown("---")
     
     st.write("Faça o upload dos arquivos base para iniciar o cruzamento de dados.")
     
-    # Divide a tela em duas colunas para os uploads ficarem lado a lado
     col1, col2 = st.columns(2)
     with col1:
-        arquivo_dr = st.file_uploader("📥 Upload do Arquivo DR", type=["xlsx", "csv"])
+        arquivo_dr = st.file_uploader("📥 Upload do Arquivo DR", type=["xlsx", "xlsm"])
     with col2:
-        arquivo_mt = st.file_uploader("📥 Upload do Material de Trabalho", type=["xlsx", "csv"])
+        arquivo_mt = st.file_uploader("📥 Upload do Material de Trabalho", type=["xlsx", "xlsm"])
         
-    st.markdown("### 🎯 Filtros de Transferência")
+    st.markdown("### 🎯 Parâmetros da Transferência")
     
-    # Divide a tela para os seletores (Iniciam desativados até os arquivos serem carregados)
-    col3, col4 = st.columns(2)
-    with col3:
-        # Nota: Por enquanto os valores são fictícios. Vamos populá-los com o Pandas depois.
-        st.multiselect(
-            "Selecione as Marcas", 
-            options=["Fendt", "Massey Ferguson", "Valtra"], 
-            disabled=(arquivo_dr is None), # Só habilita se o arquivo for carregado
-            help="Carregue o arquivo DR para liberar as marcas."
-        )
-    with col4:
-        st.multiselect(
-            "Selecione os Mercados", 
-            options=["Brasil", "Argentina", "Exportação"], 
-            disabled=(arquivo_dr is None),
-            help="Carregue o arquivo DR para liberar os mercados."
-        )
-        
-    st.markdown("<br>", unsafe_allow_html=True) # Dá um pequeno espaço
-    st.button("🚀 Executar Transferência de Dados", type="primary", use_container_width=True)
+    # Só exibe os filtros se o DR for carregado
+    if arquivo_dr is not None and arquivo_mt is not None:
+        try:
+            # Lê o nome das abas do DR dinamicamente para o usuário escolher
+            abas_dr = pd.ExcelFile(arquivo_dr).sheet_names
+            
+            # Filtros Principais
+            col_ano, col_mercado, col_marca = st.columns(3)
+            with col_ano:
+                anos_selecionados = st.multiselect("Selecione os Anos", options=["2026", "2027"])
+            with col_mercado:
+                mercados_selecionados = st.multiselect("Mercados", options=["BRA", "ARG", "OSA"])
+            with col_marca:
+                marcas_selecionadas = st.multiselect("Marcas", options=["FE", "MF", "VT"])
 
+            st.markdown("---")
+            
+            # Cria menus dinâmicos para mapear as abas dependendo do ano escolhido
+            mapeamento_abas = {}
+            if anos_selecionados:
+                st.write("📌 **Mapeamento de Abas do DR**")
+                col_abas = st.columns(len(anos_selecionados))
+                
+                for idx, ano in enumerate(anos_selecionados):
+                    with col_abas[idx]:
+                        aba_escolhida = st.selectbox(
+                            f"Qual aba do DR tem os dados de {ano}?", 
+                            options=abas_dr,
+                            key=f"aba_{ano}"
+                        )
+                        mapeamento_abas[ano] = aba_escolhida
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            # Botão de Execução
+            if st.button("🚀 Executar Transferência de Dados", type="primary", use_container_width=True):
+                if not anos_selecionados or not mercados_selecionados or not marcas_selecionadas:
+                    st.warning("⚠️ Por favor, selecione ao menos um Ano, um Mercado e uma Marca antes de executar.")
+                else:
+                    st.info("A lógica de cruzamento (OpenPyXL) entrará aqui!")
+                    # Aqui chamaremos a função de processamento no próximo passo
+                    
+        except Exception as e:
+            st.error("Erro ao ler os arquivos. Verifique se não estão corrompidos ou protegidos com senha.")
+            st.warning(str(e))
+    else:
+        st.info("Aguardando o upload dos dois arquivos para liberar os seletores...")
 def render_previsao():
     st.title("📈 Previsão de Demanda")
     st.subheader("Modelos Estatísticos e Projeções")

@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 from streamlit_option_menu import option_menu
+import openpyxl
+from io import BytesIO
 
 # ==========================================
 # CONFIGURAÇÃO DA PÁGINA

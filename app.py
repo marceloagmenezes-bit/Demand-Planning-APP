@@ -39,11 +39,13 @@ aplicar_estilo_corporativo()
 # ==========================================
 def processar_cruzamento_dr_mt(arquivo_dr, arquivo_mt, anos_selecionados, mercados_selecionados, marcas_selecionadas, mapeamento_abas, limite_mes):
     """
-    Lê os arquivos, cruza a chave (Mercado, Marca, Série) e injeta os dados.
-    Usa a variável 'limite_mes' para não sobrescrever fórmulas de estoque nos meses futuros.
+    Lê os arquivos, cruza a chave e injeta os dados.
+    Agora blindado para preservar Macros (VBA) do arquivo original.
     """
     wb_dr = openpyxl.load_workbook(arquivo_dr, data_only=True)
-    wb_mt = openpyxl.load_workbook(arquivo_mt)
+    
+    # AJUSTE DE ARQUITETURA 1: Preservando as macros do arquivo destino
+    wb_mt = openpyxl.load_workbook(arquivo_mt, keep_vba=True)
     
     for ano in anos_selecionados:
         aba_dr_nome = mapeamento_abas[ano]
@@ -84,20 +86,13 @@ def processar_cruzamento_dr_mt(arquivo_dr, arquivo_mt, anos_selecionados, mercad
             if mercado in mercados_selecionados and marca in marcas_selecionadas:
                 chave = (str(mercado).strip(), str(marca).strip(), str(serie).strip())
                 
-                # Coleta RT (12 meses totais - Exemplo)
                 valores_rt = []
                 for offset in range(12):
                     valor_celula = aba_dr.cell(row=linha, column=16 + offset).value
                     valores_rt.append(valor_celula if valor_celula is not None else 0)
                 
-                # NOTA DO ARQUITETO: Quando formos mapear o Estoque, faremos assim:
-                # valores_estoque = []
-                # for offset in range(limite_mes):  <-- AQUI ENTRA A TRAVA INTELIGENTE!
-                #     ...
-                
                 dados_extraidos[chave] = {
                     'RT': valores_rt
-                    # 'ESTOQUE': valores_estoque (Entrará na próxima fase)
                 }
 
         for linha in range(5, aba_mt.max_row + 1):
@@ -110,15 +105,9 @@ def processar_cruzamento_dr_mt(arquivo_dr, arquivo_mt, anos_selecionados, mercad
                         str(serie).strip() if serie else "")
                         
             if chave_mt in dados_extraidos:
-                # Injeta RT (12 meses)
                 valores_rt = dados_extraidos[chave_mt]['RT']
                 for offset in range(12):
                     aba_mt.cell(row=linha, column=16 + offset).value = valores_rt[offset]
-                
-                # Quando implementarmos o estoque, será injetado respeitando o limite_mes:
-                # valores_estoque = dados_extraidos[chave_mt]['ESTOQUE']
-                # for offset in range(limite_mes):
-                #      aba_mt.cell(row=linha, column=COLUNA_ESTOQUE + offset).value = valores_estoque[offset]
 
     saida_virtual = BytesIO()
     wb_mt.save(saida_virtual)
@@ -156,7 +145,6 @@ def render_atualizar_material():
         try:
             abas_dr = pd.ExcelFile(arquivo_dr).sheet_names
             
-            # FILTROS PRINCIPAIS
             col_ano, col_mercado, col_marca = st.columns(3)
             with col_ano:
                 anos_selecionados = st.multiselect("Selecione os Anos", options=["2026", "2027"])
@@ -165,11 +153,9 @@ def render_atualizar_material():
             with col_marca:
                 marcas_selecionadas = st.multiselect("Marcas", options=["FE", "MF", "VT"])
 
-            # NOVO FILTRO: MÊS REALIZADO
             st.markdown("---")
             st.write("📌 **Regra de Negócio (Estoque)**")
             
-            # Dicionário mapeando os nomes para os números equivalentes
             meses_dict = {
                 "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, 
                 "Maio": 5, "Junho": 6, "Julho": 7, "Agosto": 8, 
@@ -179,10 +165,10 @@ def render_atualizar_material():
             mes_selecionado = st.selectbox(
                 "Selecione o último mês realizado (Real):", 
                 options=list(meses_dict.keys()), 
-                index=4, # Já deixa "Maio" pré-selecionado como padrão
+                index=4,
                 help="Os dados de Estoque serão copiados apenas de Janeiro até este mês. Os meses seguintes terão suas fórmulas preservadas."
             )
-            limite_mes = meses_dict[mes_selecionado] # Converte para número (ex: 5)
+            limite_mes = meses_dict[mes_selecionado]
 
             st.markdown("---")
             
@@ -215,16 +201,20 @@ def render_atualizar_material():
                                 mercados_selecionados=mercados_selecionados,
                                 marcas_selecionadas=marcas_selecionadas,
                                 mapeamento_abas=mapeamento_abas,
-                                limite_mes=limite_mes # <- Passando a trava inteligente para o robô
+                                limite_mes=limite_mes
                             )
-                            
-                        st.success("✅ Cópia finalizada com sucesso! O layout e as fórmulas foram mantidos.")
+                        
+                        st.success("✅ Cópia finalizada com sucesso! O layout e as macros foram mantidos.")
+                        
+                        # AJUSTE DE ARQUITETURA 2: Dinamizando a extensão para o download
+                        extensao_mt = os.path.splitext(arquivo_mt.name)[1].lower()
+                        mime_type = "application/vnd.ms-excel.sheet.macroEnabled.12" if extensao_mt == ".xlsm" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                         
                         st.download_button(
-                            label="⬇️ Baixar Material de Trabalho Atualizado",
+                            label=f"⬇️ Baixar Material de Trabalho Atualizado ({extensao_mt})",
                             data=arquivo_pronto,
-                            file_name="Material_de_Trabalho_Atualizado.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            file_name=f"Material_de_Trabalho_Atualizado{extensao_mt}",
+                            mime=mime_type,
                             use_container_width=True
                         )
                     except Exception as e:

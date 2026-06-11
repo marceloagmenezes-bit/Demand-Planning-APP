@@ -50,7 +50,95 @@ def render_home():
     st.subheader("Bem-vindo ao Portal de Demand Planning")
     st.markdown("---")
     st.info("💡 Selecione uma funcionalidade no menu lateral para iniciar o processamento.")
+    
+def processar_cruzamento_dr_mt(arquivo_dr, arquivo_mt, anos_selecionados, mercados_selecionados, marcas_selecionadas, mapeamento_abas):
+    """
+    Lê os arquivos, cruza a chave (Mercado, Marca, Série) ignorando linhas 'TOTAL',
+    e injeta os dados no Material de Trabalho, retornando o arquivo pronto para download.
+    """
+    # Carrega o DR pegando apenas os valores (ignorando fórmulas)
+    wb_dr = openpyxl.load_workbook(arquivo_dr, data_only=True)
+    # Carrega o MT preservando toda a formatação e fórmulas originais
+    wb_mt = openpyxl.load_workbook(arquivo_mt)
+    
+    for ano in anos_selecionados:
+        aba_dr_nome = mapeamento_abas[ano]
+        aba_dr = wb_dr[aba_dr_nome]
+        aba_mt = wb_mt[ano] # O MT sempre tem a aba com o nome do ano (2026, 2027)
+        
+        # 1. FUNÇÃO INTERNA PARA ACHAR AS COLUNAS DINAMICAMENTE NA LINHA 4
+        def achar_colunas(aba):
+            mapa_cols = {}
+            for col in range(1, 50): # Escaneia até a coluna 50
+                valor = aba.cell(row=4, column=col).value
+                if isinstance(valor, str):
+                    texto = valor.strip().upper()
+                    if texto in ["MER", "MERCADO"]: mapa_cols['MERCADO'] = col
+                    elif texto in ["MAR", "MARCA"]: mapa_cols['MARCA'] = col
+                    elif texto in ["SÉRIE", "SERIE"]: mapa_cols['SERIE'] = col
+                    elif texto in ["PRODUTO"]: mapa_cols['PRODUTO'] = col
+            return mapa_cols
 
+        cols_dr = achar_colunas(aba_dr)
+        cols_mt = achar_colunas(aba_mt)
+        
+        # Validação de segurança se achou os cabeçalhos
+        if not all(k in cols_dr for k in ['MERCADO', 'MARCA', 'SERIE']):
+            raise ValueError(f"Cabeçalhos não encontrados na linha 4 do arquivo DR ({aba_dr_nome}).")
+            
+        # 2. MAPEAMENTO DOS DADOS DO DR (Criação do Dicionário/Memória)
+        dados_extraidos = {}
+        
+        for linha in range(5, aba_dr.max_row + 1):
+            mercado = aba_dr.cell(row=linha, column=cols_dr['MERCADO']).value
+            marca = aba_dr.cell(row=linha, column=cols_dr['MARCA']).value
+            serie = aba_dr.cell(row=linha, column=cols_dr['SERIE']).value
+            produto = aba_dr.cell(row=linha, column=cols_dr.get('PRODUTO', 0)).value
+            
+            # Limpeza e verificação (Ignora linhas vazias e as que contêm "TOTAL")
+            if not serie or not mercado or not marca:
+                continue
+            if isinstance(produto, str) and "TOTAL" in produto.upper():
+                continue
+                
+            # Verifica se está dentro dos filtros do usuário
+            if mercado in mercados_selecionados and marca in marcas_selecionadas:
+                chave = (str(mercado).strip(), str(marca).strip(), str(serie).strip())
+                
+                # Coleta os 12 meses de RT (Assumindo que no DR começa na coluna P=16)
+                valores_rt = []
+                for offset in range(12):
+                    # P(16) a AA(27)
+                    valor_celula = aba_dr.cell(row=linha, column=16 + offset).value
+                    valores_rt.append(valor_celula if valor_celula is not None else 0)
+                
+                dados_extraidos[chave] = valores_rt
+
+        # 3. INJEÇÃO DOS DADOS NO MATERIAL DE TRABALHO
+        for linha in range(5, aba_mt.max_row + 1):
+            mercado = aba_mt.cell(row=linha, column=cols_mt.get('MERCADO', 4)).value # Fallback D(4)
+            marca = aba_mt.cell(row=linha, column=cols_mt.get('MARCA', 5)).value   # Fallback E(5)
+            serie = aba_mt.cell(row=linha, column=cols_mt.get('SERIE', 6)).value
+            
+            chave_mt = (str(mercado).strip() if mercado else "", 
+                        str(marca).strip() if marca else "", 
+                        str(serie).strip() if serie else "")
+                        
+            if chave_mt in dados_extraidos:
+                valores_rt = dados_extraidos[chave_mt]
+                
+                # Injeta os 12 meses de RT (Assumindo que no MT também começa na P=16)
+                # Você pode ajustar esse offset de '16' conforme a real posição do bloco RT no MT
+                for offset in range(12):
+                    aba_mt.cell(row=linha, column=16 + offset).value = valores_rt[offset]
+
+    # 4. SALVA O ARQUIVO NO FORMATO VIRTUAL PARA DOWNLOAD NA NUVEM
+    saida_virtual = BytesIO()
+    wb_mt.save(saida_virtual)
+    saida_virtual.seek(0)
+    
+    return saida_virtual
+    
 def render_atualizar_material():
     st.header(
         "Atualizar material de trabalho com informações do DR", 

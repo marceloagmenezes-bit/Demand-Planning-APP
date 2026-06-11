@@ -49,44 +49,45 @@ def render_home():
     st.markdown("---")
     st.info("💡 Selecione uma funcionalidade no menu lateral para iniciar o processamento.")
 
-def render_carga_dados():
-    st.title("📊 Carga de Dados")
-    st.subheader("Upload de Arquivos para Análise de Demanda")
-    st.markdown("---")
-    st.write("Suba o histórico de vendas do departamento nos formatos **.xlsx (Excel)** ou **.csv**.")
-    
-    arquivo_carregado = st.file_uploader(
-        label="Arraste ou selecione seu arquivo aqui",
-        type=["xlsx", "csv"],
-        help="Limite de 200MB por arquivo."
+def render_atualizar_material():
+    # O parâmetro 'help' cria automaticamente o ícone de '?' com o texto ao passar o mouse!
+    st.header(
+        "Atualizar material de trabalho com informações do DR", 
+        help="Geralmente utilizado no início do ciclo, após atualização dos realizados do mês anterior. Transfere os dados do DR para o material de trabalho: Ao carregar os dois arquivos, selecione as marcas e os mercados desejados, e as informações de RT, WS, MRP e estoques serão transferidas do DR para o Material de trabalho!"
     )
+    st.markdown("---")
     
-    if arquivo_carregado is not None:
-        try:
-            nome_arquivo = arquivo_carregado.name
-            with st.spinner(f"Processando arquivo {nome_arquivo}..."):
-                if nome_arquivo.endswith('.csv'):
-                    df_dados = pd.read_csv(arquivo_carregado)
-                else:
-                    df_dados = pd.read_excel(arquivo_carregado)
-            
-            st.success("✅ Arquivo carregado e processado com sucesso!")
-            
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric(label="Total de Linhas", value=f"{df_dados.shape[0]:,}")
-            with col2:
-                st.metric(label="Total de Colunas", value=df_dados.shape[1])
-            with col3:
-                memoria_mb = df_dados.memory_usage(deep=True).sum() / (1024 * 1024)
-                st.metric(label="Uso de Memória", value=f"{memoria_mb:.2f} MB")
-            
-            st.markdown("### 🔍 Pré-visualização dos Dados")
-            st.dataframe(df_dados.head(10), use_container_width=True)
-            
-        except Exception as e:
-            st.error("❌ Erro ao processar o arquivo. Certifique-se de que o formato está correto.")
-            st.warning(f"Detalhe técnico: {str(e)}")
+    st.write("Faça o upload dos arquivos base para iniciar o cruzamento de dados.")
+    
+    # Divide a tela em duas colunas para os uploads ficarem lado a lado
+    col1, col2 = st.columns(2)
+    with col1:
+        arquivo_dr = st.file_uploader("📥 Upload do Arquivo DR", type=["xlsx", "csv"])
+    with col2:
+        arquivo_mt = st.file_uploader("📥 Upload do Material de Trabalho", type=["xlsx", "csv"])
+        
+    st.markdown("### 🎯 Filtros de Transferência")
+    
+    # Divide a tela para os seletores (Iniciam desativados até os arquivos serem carregados)
+    col3, col4 = st.columns(2)
+    with col3:
+        # Nota: Por enquanto os valores são fictícios. Vamos populá-los com o Pandas depois.
+        st.multiselect(
+            "Selecione as Marcas", 
+            options=["Fendt", "Massey Ferguson", "Valtra"], 
+            disabled=(arquivo_dr is None), # Só habilita se o arquivo for carregado
+            help="Carregue o arquivo DR para liberar as marcas."
+        )
+    with col4:
+        st.multiselect(
+            "Selecione os Mercados", 
+            options=["Brasil", "Argentina", "Exportação"], 
+            disabled=(arquivo_dr is None),
+            help="Carregue o arquivo DR para liberar os mercados."
+        )
+        
+    st.markdown("<br>", unsafe_allow_html=True) # Dá um pequeno espaço
+    st.button("🚀 Executar Transferência de Dados", type="primary", use_container_width=True)
 
 def render_previsao():
     st.title("📈 Previsão de Demanda")
@@ -113,7 +114,7 @@ def build_sidebar():
         # 2. MENU DE NAVEGAÇÃO (Sem Ícones)
         selected_app = option_menu(
             menu_title="Navegação",
-            options=["Home", "Carga de Dados", "Previsão"],
+            options=["Home", "Atualizar Material DR", "Previsão"],
             icons=["", "", ""],  # Ícones removidos
             menu_icon="",        # Ícone principal removido
             default_index=0,
@@ -141,11 +142,11 @@ def main():
     try:
         app_selecionado = build_sidebar()
         
-        views = {
-            "Home": render_home,
-            "Carga de Dados": render_carga_dados,
-            "Previsão": render_previsao
-        }
+views = {
+    "Home": render_home,
+    "Atualizar Material DR": render_atualizar_material, # <- Conecta o menu à nova função
+    "Previsão": render_previsao
+}
         
         if app_selecionado in views:
             views[app_selecionado]()

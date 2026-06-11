@@ -37,10 +37,10 @@ aplicar_estilo_corporativo()
 # ==========================================
 # O ROBÔ DE PROCESSAMENTO (PANDAS + OPENPYXL)
 # ==========================================
-def processar_cruzamento_dr_mt(arquivo_dr, arquivo_mt, anos_selecionados, mercados_selecionados, marcas_selecionadas, mapeamento_abas):
+def processar_cruzamento_dr_mt(arquivo_dr, arquivo_mt, anos_selecionados, mercados_selecionados, marcas_selecionadas, mapeamento_abas, limite_mes):
     """
-    Lê os arquivos, cruza a chave (Mercado, Marca, Série) ignorando linhas 'TOTAL',
-    e injeta os dados no Material de Trabalho, retornando o arquivo pronto para download.
+    Lê os arquivos, cruza a chave (Mercado, Marca, Série) e injeta os dados.
+    Usa a variável 'limite_mes' para não sobrescrever fórmulas de estoque nos meses futuros.
     """
     wb_dr = openpyxl.load_workbook(arquivo_dr, data_only=True)
     wb_mt = openpyxl.load_workbook(arquivo_mt)
@@ -50,7 +50,6 @@ def processar_cruzamento_dr_mt(arquivo_dr, arquivo_mt, anos_selecionados, mercad
         aba_dr = wb_dr[aba_dr_nome]
         aba_mt = wb_mt[ano]
         
-        # Função interna para achar as colunas dinamicamente
         def achar_colunas(aba):
             mapa_cols = {}
             for col in range(1, 50):
@@ -85,12 +84,21 @@ def processar_cruzamento_dr_mt(arquivo_dr, arquivo_mt, anos_selecionados, mercad
             if mercado in mercados_selecionados and marca in marcas_selecionadas:
                 chave = (str(mercado).strip(), str(marca).strip(), str(serie).strip())
                 
+                # Coleta RT (12 meses totais - Exemplo)
                 valores_rt = []
                 for offset in range(12):
                     valor_celula = aba_dr.cell(row=linha, column=16 + offset).value
                     valores_rt.append(valor_celula if valor_celula is not None else 0)
                 
-                dados_extraidos[chave] = valores_rt
+                # NOTA DO ARQUITETO: Quando formos mapear o Estoque, faremos assim:
+                # valores_estoque = []
+                # for offset in range(limite_mes):  <-- AQUI ENTRA A TRAVA INTELIGENTE!
+                #     ...
+                
+                dados_extraidos[chave] = {
+                    'RT': valores_rt
+                    # 'ESTOQUE': valores_estoque (Entrará na próxima fase)
+                }
 
         for linha in range(5, aba_mt.max_row + 1):
             mercado = aba_mt.cell(row=linha, column=cols_mt.get('MERCADO', 4)).value
@@ -102,9 +110,15 @@ def processar_cruzamento_dr_mt(arquivo_dr, arquivo_mt, anos_selecionados, mercad
                         str(serie).strip() if serie else "")
                         
             if chave_mt in dados_extraidos:
-                valores_rt = dados_extraidos[chave_mt]
+                # Injeta RT (12 meses)
+                valores_rt = dados_extraidos[chave_mt]['RT']
                 for offset in range(12):
                     aba_mt.cell(row=linha, column=16 + offset).value = valores_rt[offset]
+                
+                # Quando implementarmos o estoque, será injetado respeitando o limite_mes:
+                # valores_estoque = dados_extraidos[chave_mt]['ESTOQUE']
+                # for offset in range(limite_mes):
+                #      aba_mt.cell(row=linha, column=COLUNA_ESTOQUE + offset).value = valores_estoque[offset]
 
     saida_virtual = BytesIO()
     wb_mt.save(saida_virtual)
@@ -142,127 +156,9 @@ def render_atualizar_material():
         try:
             abas_dr = pd.ExcelFile(arquivo_dr).sheet_names
             
+            # FILTROS PRINCIPAIS
             col_ano, col_mercado, col_marca = st.columns(3)
             with col_ano:
                 anos_selecionados = st.multiselect("Selecione os Anos", options=["2026", "2027"])
             with col_mercado:
-                mercados_selecionados = st.multiselect("Mercados", options=["BRA", "ARG", "OSA"])
-            with col_marca:
-                marcas_selecionadas = st.multiselect("Marcas", options=["FE", "MF", "VT"])
-
-            st.markdown("---")
-            
-            mapeamento_abas = {}
-            if anos_selecionados:
-                st.write("📌 **Mapeamento de Abas do DR**")
-                col_abas = st.columns(len(anos_selecionados))
-                
-                for idx, ano in enumerate(anos_selecionados):
-                    with col_abas[idx]:
-                        aba_escolhida = st.selectbox(
-                            f"Qual aba do DR tem os dados de {ano}?", 
-                            options=abas_dr,
-                            key=f"aba_{ano}"
-                        )
-                        mapeamento_abas[ano] = aba_escolhida
-
-            st.markdown("<br>", unsafe_allow_html=True)
-            
-            if st.button("🚀 Executar Transferência de Dados", type="primary", use_container_width=True):
-                if not anos_selecionados or not mercados_selecionados or not marcas_selecionadas:
-                    st.warning("⚠️ Por favor, selecione ao menos um Ano, um Mercado e uma Marca antes de executar.")
-                else:
-                    try:
-                        with st.spinner("Processando cruzamento de dados... Isso pode levar alguns segundos."):
-                            arquivo_pronto = processar_cruzamento_dr_mt(
-                                arquivo_dr=arquivo_dr,
-                                arquivo_mt=arquivo_mt,
-                                anos_selecionados=anos_selecionados,
-                                mercados_selecionados=mercados_selecionados,
-                                marcas_selecionadas=marcas_selecionadas,
-                                mapeamento_abas=mapeamento_abas
-                            )
-                            
-                        st.success("✅ Cópia finalizada com sucesso! O layout e as fórmulas foram mantidos.")
-                        
-                        st.download_button(
-                            label="⬇️ Baixar Material de Trabalho Atualizado",
-                            data=arquivo_pronto,
-                            file_name="Material_de_Trabalho_Atualizado.xlsx",
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            use_container_width=True
-                        )
-                    except Exception as e:
-                        st.error("❌ Ocorreu um erro durante o cruzamento das planilhas.")
-                        st.write(f"Detalhe técnico: {str(e)}")
-                        
-        except Exception as e:
-            st.error("Erro ao ler os arquivos. Verifique se não estão corrompidos ou protegidos com senha.")
-            st.warning(str(e))
-    else:
-        st.info("Aguardando o upload dos dois arquivos para liberar os seletores...")
-
-def render_previsao():
-    st.title("📈 Previsão de Demanda")
-    st.subheader("Modelos Estatísticos e Projeções")
-    st.markdown("---")
-    st.write("Área destinada ao cálculo de Forecast e projeções futuras.")
-
-# ==========================================
-# COMPONENTE DO MENU LATERAL
-# ==========================================
-def build_sidebar():
-    with st.sidebar:
-        nome_logo = "logo.jpg"
-        if os.path.exists(nome_logo):
-            st.image(nome_logo, use_container_width=True)
-        else:
-            st.markdown("### 🏢 DEP. DE PLANEJAMENTO")
-            
-        st.caption("Ambiente Nuvem Protegido")
-        st.markdown("---")
-        
-        selected_app = option_menu(
-            menu_title="Navegação",
-            options=["Home", "Atualizar Material DR", "Previsão"],
-            icons=["", "", ""],
-            menu_icon="",
-            default_index=0,
-            styles={
-                "container": {"padding": "5px!", "background-color": "#FFFFFF"},
-                "nav-link": {
-                    "font-size": "15px", 
-                    "text-align": "left", 
-                    "margin":"0px", 
-                    "--hover-color": "#F0F2F6",
-                    "color": "#31333F"
-                },
-                "nav-link-selected": {
-                    "background-color": "#0078D4",
-                    "color": "white"
-                },
-            }
-        )
-    return selected_app
-
-# ==========================================
-# FLUXO PRINCIPAL (EXECUÇÃO)
-# ==========================================
-def main():
-    try:
-        app_selecionado = build_sidebar()
-        
-        views = {
-            "Home": render_home,
-            "Atualizar Material DR": render_atualizar_material,
-            "Previsão": render_previsao
-        }
-        
-        if app_selecionado in views:
-            views[app_selecionado]()
-            
-    except Exception as e:
-        st.error(f"Ocorreu um erro crítico na aplicação: {str(e)}")
-
-if __name__ == "__main__":
-    main()
+                mercados_

@@ -186,4 +186,188 @@ def render_atualizar_material():
             st.write("📌 **Regra de Negócio (Estoque)**")
             
             meses_dict = {
-                "Janeiro": 1, "Fevereiro":
+                "Janeiro": 1, "Fevereiro": 2, "Março": 3, "Abril": 4, 
+                "Maio": 5, "Junho": 6, "Julho": 7, "Agosto": 8, 
+                "Setembro": 9, "Outubro": 10, "Novembro": 11, "Dezembro": 12
+            }
+            
+            mes_selecionado = st.selectbox(
+                "Selecione o último mês realizado (Real):", 
+                options=list(meses_dict.keys()), 
+                index=4
+            )
+            limite_mes = meses_dict[mes_selecionado]
+
+            st.markdown("---")
+            
+            mapeamento_abas = {}
+            if anos_selecionados:
+                col_abas = st.columns(len(anos_selecionados))
+                for idx, ano in enumerate(anos_selecionados):
+                    with col_abas[idx]:
+                        mapeamento_abas[ano] = st.selectbox(
+                            f"Aba do DR com os dados de {ano}:", 
+                            options=abas_dr,
+                            key=f"aba_{ano}"
+                        )
+
+            st.markdown("<br>", unsafe_allow_html=True)
+            
+            if st.button("🚀 Executar Transferência de Dados", type="primary", use_container_width=True):
+                if not anos_selecionados or not mercados_selecionados or not marcas_selecionadas:
+                    st.warning("⚠️ Selecione ao menos um Ano, um Mercado e uma Marca.")
+                else:
+                    try:
+                        with st.spinner("Modo Turbo ativado. Processando cruzamento de dados..."):
+                            arquivo_pronto, qtd_atualizadas = processar_cruzamento_dr_mt(
+                                arquivo_dr=arquivo_dr,
+                                arquivo_mt=arquivo_mt,
+                                anos_selecionados=anos_selecionados,
+                                mercados_selecionados=mercados_selecionados,
+                                marcas_selecionadas=marcas_selecionadas,
+                                mapeamento_abas=mapeamento_abas,
+                                limite_mes=limite_mes
+                            )
+                        
+                        if qtd_atualizadas > 0:
+                            st.success(f"✅ Sucesso! **{qtd_atualizadas} séries** foram cruzadas e updated.")
+                            extensao_mt = os.path.splitext(arquivo_mt.name)[1].lower()
+                            mime_type = "application/vnd.ms-excel.sheet.macroEnabled.12" if extensao_mt == ".xlsm" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                            
+                            st.download_button(
+                                label=f"⬇️ Baixar Material de Trabalho Atualizado ({extensao_mt})",
+                                data=arquivo_pronto,
+                                file_name=f"Material_de_Trabalho_Atualizado{extensao_mt}",
+                                mime=mime_type,
+                                use_container_width=True
+                            )
+                        else:
+                            st.warning("⚠️ Processo finalizado, mas NENHUMA série foi atualizada.")
+                    except Exception as e:
+                        st.error("❌ Erro durante o cruzamento.")
+                        st.write(f"Detalhe técnico: {str(e)}")
+        except Exception as e:
+            st.error("Erro ao ler os arquivos.")
+            st.warning(str(e))
+    else:
+        st.info("Aguardando o upload dos dois arquivos para liberar os seletores...")
+
+# ESTA FUNÇÃO ESTAVA FALTANDO DECLARAR!
+def render_simulador():
+    st.title("🎛️ Simulador de Cenários S&OP")
+    st.subheader("Ajuste os parâmetros de mercado e operação em tempo real")
+    st.markdown("---")
+    
+    arquivo_sim = st.file_uploader("📥 Carregar Arquivo com a Aba Simulador", type=["xlsx", "xlsm"])
+    
+    if arquivo_sim is not None:
+        try:
+            xls = pd.ExcelFile(arquivo_sim)
+            if "Simulador" not in xls.sheet_names:
+                st.error("❌ Erro: O arquivo carregado não possui uma aba chamada 'Simulador'.")
+                return
+                
+            st.success("✅ Aba 'Simulador' detectada com sucesso!")
+            
+            col_ano, col_mes = st.columns(2)
+            with col_ano:
+                ano_sim = st.selectbox("Selecione o Ano do Cenário:", options=["2026", "2027"])
+            with col_mes:
+                meses_lista = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"]
+                ultimo_mes_real = st.selectbox("Último Mês Realizado (Dado Congelado):", options=meses_lista, index=4)
+                
+            st.markdown("---")
+            st.write("### 🎚️ Painel de Controle por Faixa de Potência")
+            aba_pot1, aba_pot2 = st.tabs(["⚡ Faixa 260-339", "⚡ Faixa 339+"])
+            
+            with aba_pot1:
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.markdown("##### 🏢 Mercado & Demanda")
+                    ind_original_1 = st.number_input("Indústria Original (260-339):", min_value=1000, max_value=80000, value=10000, step=500, key="ind_orig_1")
+                    ind_nova_1 = st.slider("Nova Indústria Projetada (260-339):", min_value=1000, max_value=80000, value=ind_original_1, step=500, key="ind_nova_1")
+                    mkt_share_1 = st.slider("Market Share Desejado (%) - 260-339:", min_value=0.0, max_value=100.0, value=10.0, step=0.5, key='mkt_1')
+                with col2:
+                    st.markdown("##### 📦 Metas de Estoque (S&OP)")
+                    meta_mos_1 = st.slider("Meta de Estoque de Rede (MOS - Meses de Venda):", min_value=0.0, max_value=12.0, value=3.0, step=0.5, key='mos_1')
+                    meta_fgi_1 = st.slider("Meta de Estoque de Fábrica (FGI - Unidades):", min_value=0, max_value=500, value=150, step=10, key='fgi_1')
+                    
+            with aba_pot2:
+                col3, col4 = st.columns(2)
+                with col3:
+                    st.markdown("##### 🏢 Mercado & Demanda")
+                    ind_original_2 = st.number_input("Indústria Original (339+):", min_value=1000, max_value=80000, value=5000, step=500, key="ind_orig_2")
+                    ind_nova_2 = st.slider("Nova Indústria Projetada (339+):", min_value=1000, max_value=80000, value=ind_original_2, step=500, key="ind_nova_2")
+                    mkt_share_2 = st.slider("Market Share Desejado (%) - 339+:", min_value=0.0, max_value=100.0, value=12.0, step=0.5, key='mkt_2')
+                with col4:
+                    st.markdown("##### 📦 Metas de Estoque (S&OP)")
+                    meta_mos_2 = st.slider("Meta de Estoque de Rede (MOS - Meses de Venda):", min_value=0.0, max_value=12.0, value=2.5, step=0.5, key='mos_2')
+                    meta_fgi_2 = st.slider("Meta de Estoque de Fábrica (FGI - Unidades):", min_value=0, max_value=500, value=100, step=10, key='fgi_2')
+
+            st.markdown("---")
+            st.write("### 📊 Resultado do Cenário Simulado")
+            st.info("💡 Mova as barras acima! O motor matemático irá recalcular os cenários.")
+            
+            dados_ficticios = {
+                "Mês": ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun (Simulado)", "Jul (Simulado)"],
+                "Retail (Vendas)": [10, 12, 15, 11, 14, int(ind_nova_1 * (mkt_share_1/100) / 12), int(ind_nova_1 * (mkt_share_1/100) / 12)],
+                "Wholesales (Faturamento)": [12, 12, 12, 12, 12, "Calculado via MOS", "Calculado via MOS"],
+                "Estoque Rede (MOS)": [3.1, 2.9, 3.0, 3.2, 3.0, meta_mos_1, meta_mos_1]
+            }
+            st.dataframe(pd.DataFrame(dados_ficticios), use_container_width=True)
+
+        except Exception as e:
+            st.error(f"Erro ao processar o simulador: {str(e)}")
+    else:
+        st.info("Aguardando o upload do arquivo para carregar o painel de simulação...")
+
+def render_previsao():
+    st.title("📈 Previsão de Demanda")
+
+# ==========================================
+# COMPONENTE DO MENU LATERAL
+# ==========================================
+def build_sidebar():
+    with st.sidebar:
+        nome_logo = "logo.jpg"
+        if os.path.exists(nome_logo):
+            st.image(nome_logo, use_container_width=True)
+        else:
+            st.markdown("### 🏢 DEP. DE PLANEJAMENTO")
+            
+        st.caption("Ambiente Nuvem Protegido")
+        st.markdown("---")
+        
+        selected_app = option_menu(
+            menu_title="Navegação",
+            options=["Home", "Atualizar Material DR", "Simulador de Cenários", "Previsão"],
+            icons=["", "", "", ""],
+            menu_icon="",
+            default_index=0,
+            styles={
+                "container": {"padding": "5px!", "background-color": "#FFFFFF"},
+                "nav-link": {"font-size": "15px", "text-align": "left", "margin":"0px", "--hover-color": "#F0F2F6", "color": "#31333F"},
+                "nav-link-selected": {"background-color": "#0078D4", "color": "white"},
+            }
+        )
+    return selected_app
+
+# ==========================================
+# FLUXO PRINCIPAL (EXECUÇÃO)
+# ==========================================
+def main():
+    try:
+        app_selecionado = build_sidebar()
+        views = {
+            "Home": render_home,
+            "Atualizar Material DR": render_atualizar_material,
+            "Simulador de Cenários": render_simulador,
+            "Previsão": render_previsao
+        }
+        if app_selecionado in views:
+            views[app_selecionado]()
+    except Exception as e:
+        st.error(f"Erro crítico: {str(e)}")
+
+if __name__ == "__main__":
+    main()

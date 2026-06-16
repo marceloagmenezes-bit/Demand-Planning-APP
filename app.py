@@ -230,7 +230,7 @@ def render_atualizar_material():
                             )
                         
                         if qtd_atualizadas > 0:
-                            st.success(f"✅ Sucesso! **{qtd_atualizadas} séries** foram cruzadas e updated.")
+                            st.success(f"✅ Sucesso! **{qtd_atualizadas} séries** foram cruzadas.")
                             extensao_mt = os.path.splitext(arquivo_mt.name)[1].lower()
                             mime_type = "application/vnd.ms-excel.sheet.macroEnabled.12" if extensao_mt == ".xlsm" else "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                             
@@ -252,7 +252,6 @@ def render_atualizar_material():
     else:
         st.info("Aguardando o upload dos dois arquivos para liberar os seletores...")
 
-# ESTA FUNÇÃO ESTAVA FALTANDO DECLARAR!
 def render_simulador():
     st.title("🎛️ Simulador de Cenários S&OP")
     st.subheader("Ajuste os parâmetros de mercado e operação em tempo real")
@@ -280,41 +279,88 @@ def render_simulador():
             st.write("### 🎚️ Painel de Controle por Faixa de Potência")
             aba_pot1, aba_pot2 = st.tabs(["⚡ Faixa 260-339", "⚡ Faixa 339+"])
             
+            # --- FAIXA 1 (260-339) ---
             with aba_pot1:
                 col1, col2 = st.columns(2)
                 with col1:
                     st.markdown("##### 🏢 Mercado & Demanda")
-                    ind_original_1 = st.number_input("Indústria Original (260-339):", min_value=1000, max_value=80000, value=10000, step=500, key="ind_orig_1")
-                    ind_nova_1 = st.slider("Nova Indústria Projetada (260-339):", min_value=1000, max_value=80000, value=ind_original_1, step=500, key="ind_nova_1")
-                    mkt_share_1 = st.slider("Market Share Desejado (%) - 260-339:", min_value=0.0, max_value=100.0, value=10.0, step=0.5, key='mkt_1')
+                    ind_original_1 = st.number_input("Indústria Original (260-339):", min_value=1000, max_value=80000, value=12000, step=1, key="ind_orig_1")
+                    # Step=1 para valores exatos e caixinha liberada para digitar
+                    ind_nova_1 = st.slider("Nova Indústria Projetada (260-339):", min_value=1000, max_value=80000, value=int(ind_original_1), step=1, key="ind_nova_1")
+                    mkt_share_1 = st.slider("Market Share Desejado (%) - 260-339:", min_value=0.0, max_value=100.0, value=12.4, step=0.1, key='mkt_1')
                 with col2:
                     st.markdown("##### 📦 Metas de Estoque (S&OP)")
-                    meta_mos_1 = st.slider("Meta de Estoque de Rede (MOS - Meses de Venda):", min_value=0.0, max_value=12.0, value=3.0, step=0.5, key='mos_1')
-                    meta_fgi_1 = st.slider("Meta de Estoque de Fábrica (FGI - Unidades):", min_value=0, max_value=500, value=150, step=10, key='fgi_1')
-                    
+                    # Step=0.1 para MOS preciso conforme pedido
+                    meta_mos_1 = st.slider("Meta de Estoque de Rede (MOS - Meses de Venda):", min_value=0.0, max_value=12.0, value=3.2, step=0.1, key='mos_1')
+                    meta_fgi_1 = st.slider("Meta de Estoque de Fábrica (FGI - Unidades):", min_value=0, max_value=500, value=120, step=1, key='fgi_1')
+            
+            # --- FAIXA 2 (339+) ---
             with aba_pot2:
                 col3, col4 = st.columns(2)
                 with col3:
                     st.markdown("##### 🏢 Mercado & Demanda")
-                    ind_original_2 = st.number_input("Indústria Original (339+):", min_value=1000, max_value=80000, value=5000, step=500, key="ind_orig_2")
-                    ind_nova_2 = st.slider("Nova Indústria Projetada (339+):", min_value=1000, max_value=80000, value=ind_original_2, step=500, key="ind_nova_2")
-                    mkt_share_2 = st.slider("Market Share Desejado (%) - 339+:", min_value=0.0, max_value=100.0, value=12.0, step=0.5, key='mkt_2')
+                    ind_original_2 = st.number_input("Indústria Original (339+):", min_value=1000, max_value=80000, value=6000, step=1, key="ind_orig_2")
+                    ind_nova_2 = st.slider("Nova Indústria Projetada (339+):", min_value=1000, max_value=80000, value=int(ind_original_2), step=1, key="ind_nova_2")
+                    mkt_share_2 = st.slider("Market Share Desejado (%) - 339+:", min_value=0.0, max_value=100.0, value=8.5, step=0.1, key='mkt_2')
                 with col4:
                     st.markdown("##### 📦 Metas de Estoque (S&OP)")
-                    meta_mos_2 = st.slider("Meta de Estoque de Rede (MOS - Meses de Venda):", min_value=0.0, max_value=12.0, value=2.5, step=0.5, key='mos_2')
-                    meta_fgi_2 = st.slider("Meta de Estoque de Fábrica (FGI - Unidades):", min_value=0, max_value=500, value=100, step=10, key='fgi_2')
+                    meta_mos_2 = st.slider("Meta de Estoque de Rede (MOS - Meses de Venda):", min_value=0.0, max_value=12.0, value=2.8, step=0.1, key='mos_2')
+                    meta_fgi_2 = st.slider("Meta de Estoque de Fábrica (FGI - Unidades):", min_value=0, max_value=500, value=95, step=1, key='fgi_2')
 
             st.markdown("---")
-            st.write("### 📊 Resultado do Cenário Simulado")
-            st.info("💡 Mova as barras acima! O motor matemático irá recalcular os cenários.")
+            st.write("### 📊 Projeção Mensal de Estoque e Operações (S&OP)")
             
-            dados_ficticios = {
-                "Mês": ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun (Simulado)", "Jul (Simulado)"],
-                "Retail (Vendas)": [10, 12, 15, 11, 14, int(ind_nova_1 * (mkt_share_1/100) / 12), int(ind_nova_1 * (mkt_share_1/100) / 12)],
-                "Wholesales (Faturamento)": [12, 12, 12, 12, 12, "Calculado via MOS", "Calculado via MOS"],
-                "Estoque Rede (MOS)": [3.1, 2.9, 3.0, 3.2, 3.0, meta_mos_1, meta_mos_1]
-            }
-            st.dataframe(pd.DataFrame(dados_ficticios), use_container_width=True)
+            # MATEMÁTICA DA SIMULAÇÃO: DINÂMICA COMPLETA MÊS A MÊS
+            # Simulando o cálculo dinâmico reverso baseado nas escolhas das barras
+            vendas_totais_novas = int(ind_nova_1 * (mkt_share_1 / 100))
+            venda_mensal_simulada = int(vendas_totais_novas / 12)
+            
+            # Exemplo de fluxo calculando unidades exatas para WS e FGI
+            meses_proj = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun*", "Jul*", "Ago*", "Set*", "Out*", "Nov*", "Dez*"]
+            retail_dinamico = [45, 50, 55, 48, 52, venda_mensal_simulada, venda_mensal_simulada, venda_mensal_simulada, venda_mensal_simulada, venda_mensal_simulada, venda_mensal_simulada, venda_mensal_simulada]
+            
+            # Cálculo de unidades necessárias de WS para fixar o MOS desejado
+            ws_dinamico = []
+            estoque_rede_proj = []
+            estoque_fabrica_proj = []
+            mrp_dinamico = []
+            
+            # Histórico Realizado (Jan-Mai)
+            est_rede_atual = 150
+            est_fab_atual = 80
+            
+            for idx, m in enumerate(meses_proj):
+                if idx <= 4: # Realizado Congelado
+                    ws_dinamico.append(50)
+                    mrp_dinamico.append(48)
+                    est_rede_atual = est_rede_atual + 50 - retail_dinamico[idx]
+                    est_fab_atual = est_fab_atual + 48 - 50
+                    estoque_rede_proj.append(est_rede_atual)
+                    estoque_fabrica_proj.append(est_fab_atual)
+                else: # Projeção Futura Dinâmica
+                    # Calcula as UNIDADES de WS necessárias para atingir a meta de MOS
+                    target_est_rede = int(meta_mos_1 * retail_dinamico[idx]) 
+                    unidades_ws_necessarias = target_est_rede - estoque_rede_proj[idx-1] + retail_dinamico[idx]
+                    ws_dinamico.append(max(0, unidades_ws_necessarias))
+                    estoque_rede_proj.append(target_est_rede)
+                    
+                    # Calcula as UNIDADES de MRP para cravar a meta de Estoque de Fábrica (FGI)
+                    target_est_fabrica = meta_fgi_1
+                    unidades_mrp_necessarias = target_est_fabrica - estoque_fabrica_proj[idx-1] + ws_dinamico[idx]
+                    mrp_dinamico.append(max(0, unidades_mrp_necessarias))
+                    estoque_fabrica_proj.append(target_est_fabrica)
+
+            df_resultado = pd.DataFrame({
+                "Mês": meses_proj,
+                "Retail (Vendas)": retail_dinamico,
+                "Wholesales (Faturamento Unidades)": ws_dinamico,
+                "MRP (Produção Unidades)": mrp_dinamico,
+                "Estoque da Rede (Saldo Final)": estoque_rede_proj,
+                "Estoque da Fábrica (FGI)": estoque_fabrica_proj
+            })
+            
+            st.dataframe(df_resultado, use_container_width=True)
+            st.caption("* Meses com projeção calculada automaticamente em tempo real.")
 
         except Exception as e:
             st.error(f"Erro ao processar o simulador: {str(e)}")

@@ -1,80 +1,3 @@
-import streamlit as st
-import pandas as pd
-import os
-import openpyxl
-from io import BytesIO
-from streamlit_option_menu import option_menu
-
-# ==========================================
-# CONFIGURAÇÃO DA PÁGINA
-# ==========================================
-st.set_page_config(
-    page_title="Demand Planning APP",
-    page_icon="📦",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-def aplicar_estilo_corporativo():
-    estilo_css = """
-    <style>
-        [data-testid="stSidebar"] {
-            background-color: #FFFFFF !important;
-            border-right: 2px solid #4F4F4F !important;
-        }
-        [data-testid="stSidebar"] > div:first-child {
-            background-color: #FFFFFF !important;
-        }
-    </style>
-    """
-    st.markdown(estilo_css, unsafe_allow_html=True)
-
-aplicar_estilo_corporativo()
-
-def limpar_texto(texto):
-    if texto is None:
-        return ""
-    return " ".join(str(texto).upper().strip().split())
-
-# ==========================================
-# MOTOR REAL DE LEITURA E PROJEÇÃO S&OP
-# ==========================================
-def extrair_dados_reais_faixa(df_aba, linhas_range, faixa_alvo):
-    """Varre as linhas específicas do Excel e extrai a curva de RT, WS e MRP somada para a faixa."""
-    # Garante os índices baseados no Excel (ajustando para base 0 do pandas)
-    df_bloco = df_aba.iloc[linhas_range[0]-2 : linhas_range[1]-1].copy()
-    
-    # Filtra as linhas que pertencem à faixa de potência escolhida (Coluna A - índice 0)
-    df_filtrado = df_bloco[df_bloco.iloc[:, 0].astype(str).str.contains(faixa_alvo, na=False)]
-    
-    # Se não achar nada, retorna lista zerada para os 12 meses
-    if df_filtrado.empty:
-        return [0]*12, [0]*12, [0]*12
-        
-    # Mapeamento horizontal baseado nas colunas do seu print:
-    # RT: Colunas G até R (índices 6 a 17 no pandas)
-    rt_meses = df_filtrado.iloc[:, 6:18].sum(axis=0).astype(int).tolist()
-    
-    # WS: Colunas T até AE (índices 19 a 30 no pandas) - Ajuste se a posição real variar
-    ws_meses = df_filtrado.iloc[:, 19:31].sum(axis=0).astype(int).tolist() if df_aba.shape[1] > 30 else [max(1, int(x*0.9)) for x in rt_meses]
-    
-    # MRP: Colunas seguintes (Padrão equivalente simulado caso falte colunas no buffer)
-    mrp_meses = [max(1, int(x*0.95)) for x in ws_meses]
-    
-    return rt_meses, ws_meses, mrp_meses
-
-# ==========================================
-# MÓDULOS DE RENDERIZAÇÃO DE TELAS
-# ==========================================
-def render_home():
-    st.title("🏠 Planejamento de Demanda")
-    st.markdown("---")
-    st.info("💡 Selecione uma funcionalidade no menu lateral para iniciar o processamento.")
-
-def render_atualizar_material():
-    st.header("Atualizar material de trabalho com informações do DR")
-    st.info("Esta tela está configurada para uso via macro local conforme alinhamento de arquitetura.")
-
 def render_simulador():
     st.title("🎛️ Simulador de Cenários S&OP")
     st.subheader("Ajuste os parâmetros de mercado e operação em tempo real")
@@ -190,9 +113,9 @@ def render_simulador():
                     estoque_rede_proj.append(max(0, est_rede_atual))
                     estoque_fabrica_proj.append(max(0, est_fab_atual))
                 else: # Projeção Sazonal com Amortecimento de Meta
-                    # 1. Traz a Sazonalidade Real da linha do Excel
+                    # 1. Traz a Sazonalidade Real da linha do Excel (CORRIGIDO fator_escala AQUI!)
                     val_original_mes = rt_base[idx]
-                    novo_rt = round(val_original_mes * Fator_escala) if val_original_mes > 0 else 0
+                    novo_rt = round(val_original_mes * fator_escala) if val_original_mes > 0 else 0
                     if val_original_mes > 0 and novo_rt == 0: novo_rt = 1
                     retail_dinamico.append(novo_rt)
                     
@@ -209,7 +132,7 @@ def render_simulador():
                     ws_dinamico.append(max(0, unidades_ws))
                     estoque_rede_proj.append(max(0, target_est_rede_suave))
                     
-                    # 3. Suavização Dinâmica da Produção (MRP) via FGI Alvo
+                    # 3. Suavização Dinâmica da Production (MRP) via FGI Alvo
                     gap_fabrica = meta_fgi - estoque_fabrica_proj[idx-1]
                     ajuste_suave_fabrica = int(gap_fabrica / passos_restantes) if passos_restantes > 1 else gap_fabrica
                     
@@ -235,47 +158,3 @@ def render_simulador():
             st.error(f"Erro ao processar o simulador real: {str(e)}")
     else:
         st.info("Aguardando o upload do arquivo para extrair as curvas de sazonalidade originais...")
-
-def render_previsao():
-    st.title("📈 Previsão de Demanda")
-
-def build_sidebar():
-    with st.sidebar:
-        nome_logo = "logo.jpg"
-        if os.path.exists(nome_logo):
-            st.image(nome_logo, use_container_width=True)
-        else:
-            st.markdown("### 🏢 DEP. DE PLANEJAMENTO")
-        st.caption("Ambiente Nuvem Protegido")
-        st.markdown("---")
-        
-        selected_app = option_menu(
-            menu_title="Navegação",
-            options=["Home", "Atualizar Material DR", "Simulador de Cenários", "Previsão"],
-            icons=["", "", "", ""],
-            menu_icon="",
-            default_index=2,
-            styles={
-                "container": {"padding": "5px!", "background-color": "#FFFFFF"},
-                "nav-link": {"font-size": "15px", "text-align": "left", "margin":"0px", "--hover-color": "#F0F2F6", "color": "#31333F"},
-                "nav-link-selected": {"background-color": "#0078D4", "color": "white"},
-            }
-        )
-    return selected_app
-
-def main():
-    try:
-        app_selecionado = build_sidebar()
-        views = {
-            "Home": render_home,
-            "Atualizar Material DR": render_atualizar_material,
-            "Simulador de Cenários": render_simulador,
-            "Previsão": render_previsao
-        }
-        if app_selecionado in views:
-            views[app_selecionado]()
-    except Exception as e:
-        st.error(f"Erro crítico: {str(e)}")
-
-if __name__ == "__main__":
-    main()

@@ -300,7 +300,7 @@ def build_sidebar():
         
         selected_app = option_menu(
             menu_title="Navegação",
-            options=["Home", "Atualizar Material DR", "Previsão"],
+           options=["Home", "Atualizar Material DR", "Simulador de Cenários", "Previsão"],
             icons=["", "", ""],
             menu_icon="",
             default_index=0,
@@ -316,10 +316,11 @@ def main():
     try:
         app_selecionado = build_sidebar()
         views = {
-            "Home": render_home,
-            "Atualizar Material DR": render_atualizar_material,
-            "Previsão": render_previsao
-        }
+    "Home": render_home,
+    "Atualizar Material DR": render_atualizar_material,
+    "Simulador de Cenários": render_simulador, # <- Conecta a nova tela
+    "Previsão": render_previsao
+}
         if app_selecionado in views:
             views[app_selecionado]()
     except Exception as e:

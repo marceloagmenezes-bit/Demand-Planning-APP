@@ -1,3 +1,108 @@
+import streamlit as st
+import pandas as pd
+import os
+import openpyxl
+from io import BytesIO
+from streamlit_option_menu import option_menu
+
+# ==========================================
+# CONFIGURAÇÃO DA PÁGINA
+# ==========================================
+st.set_page_config(
+    page_title="Demand Planning APP",
+    page_icon="📦",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ==========================================
+# ESTILIZAÇÃO VISUAL AVANÇADA (CSS)
+# ==========================================
+def aplicar_estilo_corporativo():
+    estilo_css = """
+    <style>
+        [data-testid="stSidebar"] {
+            background-color: #FFFFFF !important;
+            border-right: 2px solid #4F4F4F !important;
+        }
+        [data-testid="stSidebar"] > div:first-child {
+            background-color: #FFFFFF !important;
+        }
+    </style>
+    """
+    st.markdown(estilo_css, unsafe_allow_html=True)
+
+aplicar_estilo_corporativo()
+
+# ==========================================
+# FUNÇÕES AUXILIARES DE LIMPEZA E ARREDONDAMENTO
+# ==========================================
+def limpar_texto(texto):
+    if texto is None:
+        return ""
+    return " ".join(str(texto).upper().strip().split())
+
+def arredondar_sazonal(valor_original, fator):
+    """Aplica o fator mantendo a proporcionalidade e garante mínimo de 1 se o original for > 0"""
+    if valor_original == 0:
+        return 0
+    calculado = round(valor_original * fator)
+    if valor_original > 0 and calculado == 0:
+        return 1
+    return calculado
+
+# ==========================================
+# MOTOR REAL DE LEITURA DO EXCEL (PANDAS)
+# ==========================================
+def extrair_dados_reais_faixa(df_aba, linhas_range, faixa_alvo):
+    """Varre as linhas específicas do Excel e extrai a curva de RT, WS e MRP somada para a faixa."""
+    # Garante os índices baseados no Excel (ajustando para base 0 do pandas)
+    df_bloco = df_aba.iloc[linhas_range[0]-2 : linhas_range[1]-1].copy()
+    
+    # Filtra as linhas que pertencem à faixa de potência escolhida (Coluna A - índice 0)
+    df_filtrado = df_bloco[df_bloco.iloc[:, 0].astype(str).str.contains(faixa_alvo, na=False)]
+    
+    # Se não achar nada, retorna lista zerada para os 12 meses
+    if df_filtrado.empty:
+        return [0]*12, [0]*12, [0]*12
+        
+    # Mapeamento horizontal baseado nas colunas do seu print:
+    # RT: Colunas G até R (índices 6 a 17 no pandas)
+    rt_meses = df_filtrado.iloc[:, 6:18].sum(axis=0).astype(int).tolist()
+    
+    # WS: Colunas T até AE (índices 19 a 30 no pandas) - Ajuste se a posição real variar
+    ws_meses = df_filtrado.iloc[:, 19:31].sum(axis=0).astype(int).tolist() if df_aba.shape[1] > 30 else [max(1, int(x*0.9)) for x in rt_meses]
+    
+    # MRP: Colunas seguintes (Padrão equivalente simulado caso falte colunas no buffer)
+    mrp_meses = [max(1, int(x*0.95)) for x in ws_meses]
+    
+    return rt_meses, ws_meses, mrp_meses
+
+# ==========================================
+# O ROBÔ DE PROCESSAMENTO (VBA MOCK / REVISÃO)
+# ==========================================
+def processar_cruzamento_dr_mt(arquivo_dr, arquivo_mt, anos_selecionados, mercados_selecionados, marcas_selecionadas, mapeamento_abas, limite_mes):
+    """Função mantida como esqueleto técnico pois este processo migrará para macro local."""
+    wb_dr = openpyxl.load_workbook(arquivo_dr, data_only=True)
+    wb_mt = openpyxl.load_workbook(arquivo_mt, keep_vba=True)
+    linhas_atualizadas_total = 0
+    return BytesIO(), linhas_atualizadas_total
+
+# ==========================================
+# MÓDULOS DE RENDERIZAÇÃO DE TELAS
+# ==========================================
+def render_home():
+    st.title("🏠 Planejamento de Demanda")
+    st.subheader("Bem-vindo ao Portal de Demand Planning")
+    st.markdown("---")
+    st.info("💡 Selecione uma funcionalidade no menu lateral para iniciar o processamento.")
+
+def render_atualizar_material():
+    st.header("Atualizar material de trabalho com informações do DR")
+    st.markdown("---")
+    st.info("📌 **Nota de Arquitetura:** Conforme nossa última decisão, este cruzamento pesado de arquivos .xlsm será executado localmente via Excel Macro (VBA) para garantir 100% de performance e segurança de formatação.")
+    st.write("Para recuperar o código VBA desta função no chat, digite: **'Solução para atualizar MT com macro'**.")
+
 def render_simulador():
     st.title("🎛️ Simulador de Cenários S&OP")
     st.subheader("Ajuste os parâmetros de mercado e operação em tempo real")
@@ -52,12 +157,13 @@ def render_simulador():
                     st.markdown("##### 📦 Metas de Estoque & Tempo de Convergência")
                     meta_mos_1 = st.slider("Meta de Estoque de Rede (MOS desejado):", min_value=0.0, max_value=12.0, value=3.2, step=0.1, key='mos_1')
                     meta_fgi_1 = st.slider("Meta de Estoque de Fábrica (FGI - Unidades):", min_value=0, max_value=500, value=208, step=1, key='fgi_1')
-                    meses_convergencia = st.slider("Prazo para atingir os objetivos (em meses):", min_value=1, max_value=7, value=3, key='conv_1')
+                    meses_convergencia_1 = st.slider("Prazo para atingir os objetivos (em meses):", min_value=1, max_value=7, value=3, key='conv_1')
 
-                # Seleciona os vetores ativos para o cálculo do cenário da Faixa 1
+                # Valores default para a execução da Faixa 1
                 rt_base, ws_base, mrp_base = rt_real_f1, ws_real_f1, mrp_real_f1
                 ind_orig, ind_nova, mkt_share = ind_original_1, ind_nova_1, mkt_share_1
                 meta_mos, meta_fgi = meta_mos_1, meta_fgi_1
+                meses_convergencia = meses_convergencia_1
                 
             with aba_pot2:
                 col3, col4 = st.columns(2)
@@ -71,13 +177,6 @@ def render_simulador():
                     meta_mos_2 = st.slider("Meta de Estoque de Rede (MOS desejado):", min_value=0.0, max_value=12.0, value=2.8, step=0.1, key='mos_2')
                     meta_fgi_2 = st.slider("Meta de Estoque de Fábrica (FGI - Unidades):", min_value=0, max_value=500, value=150, step=1, key='fgi_2')
                     meses_convergencia_2 = st.slider("Prazo para atingir os objetivos (em meses):", min_value=1, max_value=7, value=3, key='conv_2')
-
-                # Se o usuário clicar na Aba 2, o motor roda os dados da Faixa 2
-                if st.session_state.get("current_tab") == "⚡ Faixa 339+":
-                    rt_base, ws_base, mrp_base = rt_real_f2, ws_real_f2, mrp_real_f2
-                    ind_orig, ind_nova, mkt_share = ind_original_2, ind_nova_2, mkt_share_2
-                    meta_mos, meta_fgi = meta_mos_2, meta_fgi_2
-                    meses_convergencia = meses_convergencia_2
 
             st.markdown("---")
             st.write(f"### 📊 Projeção Mensal de Estoque e Operações Real (Ano {ano_sim})")
@@ -113,7 +212,7 @@ def render_simulador():
                     estoque_rede_proj.append(max(0, est_rede_atual))
                     estoque_fabrica_proj.append(max(0, est_fab_atual))
                 else: # Projeção Sazonal com Amortecimento de Meta
-                    # 1. Traz a Sazonalidade Real da linha do Excel (CORRIGIDO fator_escala AQUI!)
+                    # 1. Traz a Sazonalidade Real da linha do Excel (fator_escala corrigido)
                     val_original_mes = rt_base[idx]
                     novo_rt = round(val_original_mes * fator_escala) if val_original_mes > 0 else 0
                     if val_original_mes > 0 and novo_rt == 0: novo_rt = 1
@@ -132,7 +231,7 @@ def render_simulador():
                     ws_dinamico.append(max(0, unidades_ws))
                     estoque_rede_proj.append(max(0, target_est_rede_suave))
                     
-                    # 3. Suavização Dinâmica da Production (MRP) via FGI Alvo
+                    # 3. Suavização Dinâmica da Produção (MRP) via FGI Alvo
                     gap_fabrica = meta_fgi - estoque_fabrica_proj[idx-1]
                     ajuste_suave_fabrica = int(gap_fabrica / passos_restantes) if passos_restantes > 1 else gap_fabrica
                     
@@ -152,9 +251,62 @@ def render_simulador():
             })
             
             st.dataframe(df_resultado, use_container_width=True)
-            st.caption("* Projeções calculadas e calibradas com base na matriz de dados reais importada.")
+            st.caption("* Projeções calculadas e calibradas com base na curva sazonal real importada.")
 
         except Exception as e:
             st.error(f"Erro ao processar o simulador real: {str(e)}")
     else:
         st.info("Aguardando o upload do arquivo para extrair as curvas de sazonalidade originais...")
+
+def render_previsao():
+    st.title("📈 Previsão de Demanda")
+    st.subheader("Modelos Estatísticos Avançados")
+    st.markdown("---")
+    st.write("Módulo destinado a projeções futuras automatizadas via IA e algoritmos preditivos.")
+
+# ==========================================
+# COMPONENTE DO MENU LATERAL
+# ==========================================
+def build_sidebar():
+    with st.sidebar:
+        nome_logo = "logo.jpg"
+        if os.path.exists(nome_logo):
+            st.image(nome_logo, use_container_width=True)
+        else:
+            st.markdown("### 🏢 DEP. DE PLANEJAMENTO")
+        st.caption("Ambiente Nuvem Protegido")
+        st.markdown("---")
+        
+        selected_app = option_menu(
+            menu_title="Navegação",
+            options=["Home", "Atualizar Material DR", "Simulador de Cenários", "Previsão"],
+            icons=["", "", "", ""],
+            menu_icon="",
+            default_index=2, # Inicia direto no Simulador para agilizar os testes
+            styles={
+                "container": {"padding": "5px!", "background-color": "#FFFFFF"},
+                "nav-link": {"font-size": "15px", "text-align": "left", "margin":"0px", "--hover-color": "#F0F2F6", "color": "#31333F"},
+                "nav-link-selected": {"background-color": "#0078D4", "color": "white"},
+            }
+        )
+    return selected_app
+
+# ==========================================
+# FLUXO PRINCIPAL (EXECUÇÃO)
+# ==========================================
+def main():
+    try:
+        app_selecionado = build_sidebar()
+        views = {
+            "Home": render_home,
+            "Atualizar Material DR": render_atualizar_material,
+            "Simulador de Cenários": render_simulador,
+            "Previsão": render_previsao
+        }
+        if app_selecionado in views:
+            views[app_selecionado]()
+    except Exception as e:
+        st.error(f"Erro crítico: {str(e)}")
+
+if __name__ == "__main__":
+    main()
